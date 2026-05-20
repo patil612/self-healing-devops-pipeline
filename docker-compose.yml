@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  jenkins:
+    build: ./jenkins
+    container_name: jenkins
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      # Mount the Docker socket to allow Jenkins to spawn/control sibling containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Run as root to access the docker socket easily
+    user: root
+  # We can also define the app here, but ideally Jenkins should deploy it.
+  # For the purpose of the "Self-Healing" demo, let's have Jenkins manage the app container.
+  # So we won't define the app service here, but we will use the same network if needed.
+
+volumes:
+  jenkins_home:

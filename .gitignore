@@ -1,0 +1,13 @@
+# Logs
+*_log.txt
+failure_log.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jenkins and Docker local state
+.jenkins/
+.data/

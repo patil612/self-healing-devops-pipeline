@@ -1,0 +1,13 @@
+---
+- name: Heal Missing Dependency
+  hosts: localhost
+  tasks:
+    - name: Install dependencies
+      command: pip install -r /var/jenkins_home/workspace/project3/app/requirements.txt
+      # In a real scenario, this might need to target the specific container or environment
+      # For this demo, assuming we are running inside Jenkins which has access to the source
+      ignore_errors: yes
+
+    - name: Rebuild/Restart Container
+      command: docker restart flask-app-failure
+      # This assumes the container name is known

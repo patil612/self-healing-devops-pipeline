@@ -1,0 +1,6 @@
+---
+- name: Heal Service Crash
+  hosts: localhost
+  tasks:
+    - name: Restart Flask Container
+      command: docker restart flask-app-failure
