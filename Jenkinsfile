@@ -10,6 +10,7 @@ pipeline {
         stage('Build') {
             steps {
                 script {
+                    sh "curl -X POST -d 'status=building&log=Starting Build phase: Building Docker image...' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=building&log=Starting Build phase: Building Docker image...' http://172.17.0.1:3000/api/update || true"
                     sh 'docker build -t ${DOCKER_IMAGE} ./app'
                 }
             }
@@ -18,6 +19,7 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
+                    sh "curl -X POST -d 'status=deploying&log=Starting Deploy phase: Stopping old container and starting new one...' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=deploying&log=Starting Deploy phase: Stopping old container and starting new one...' http://172.17.0.1:3000/api/update || true"
                     // Check if container exists and remove it (forcefully)
                     sh "docker rm -f ${CONTAINER_NAME} || true"
                     // Run the container
@@ -29,6 +31,7 @@ pipeline {
         stage('Test') {
             steps {
                 script {
+                    sh "curl -X POST -d 'status=testing&log=Starting Health Test phase: Pinging Flask app container...' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=testing&log=Starting Health Test phase: Pinging Flask app container...' http://172.17.0.1:3000/api/update || true"
                     // Give it a moment to start
                     sleep 5
                     // Simple health check
@@ -39,8 +42,14 @@ pipeline {
     }
 
     post {
+        success {
+            script {
+                sh "curl -X POST -d 'status=success&log=Pipeline built, deployed, and tested successfully! App is healthy.' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=success&log=Pipeline built, deployed, and tested successfully! App is healthy.' http://172.17.0.1:3000/api/update || true"
+            }
+        }
         failure {
             script {
+                sh "curl -X POST -d 'status=failed&log=Health check failed! App container crashed or unresponsive.' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=failed&log=Health check failed! App container crashed or unresponsive.' http://172.17.0.1:3000/api/update || true"
                 echo "Pipeline failed! Initiating Self-Healing process..."
                 
                 // 1. Capture Logs
@@ -52,23 +61,28 @@ pipeline {
                 echo "Analyzer Output: ${analyzerOutput}"
                 
                 // Extract recommendation
-                def recommendation = analyzerOutput.split("RECOMMENDATION: ")[1]
+                def recommendation = ""
+                try {
+                    recommendation = analyzerOutput.split("RECOMMENDATION: ")[1]
+                } catch(Exception e) {
+                    echo "Could not parse recommendation: ${e.message}"
+                }
                 
                 if (recommendation && recommendation != "None") {
+                    sh "curl -X POST -d 'status=healing&log=Analyzing logs... Recommendation: ${recommendation}. Running Ansible playbook...' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=healing&log=Analyzing logs... Recommendation: ${recommendation}. Running Ansible playbook...' http://172.17.0.1:3000/api/update || true"
                     echo "Applying fix: ${recommendation}"
                     
                     // 3. Run Ansible Playbook
-                    // We point to the local inventory and the specific playbook
                     sh "ansible-playbook -i ansible/inventory ansible/playbooks/${recommendation}"
                     
-                    // 4. Retry the build (Optional: triggering a new build)
-                    // In a real pipeline, we might retry the failed stage. 
-                    // For this demo, we'll just output that we healed it.
+                    sh "curl -X POST -d 'status=healed&log=Ansible healing playbook executed successfully. Container restarted!' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=healed&log=Ansible healing playbook executed successfully. Container restarted!' http://172.17.0.1:3000/api/update || true"
                     echo "Heal attempt complete. Please re-run the job to verify fix."
                 } else {
+                    sh "curl -X POST -d 'status=failed&log=Logs analyzed but no automated healing playbook was found.' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=failed&log=Logs analyzed but no automated healing playbook was found.' http://172.17.0.1:3000/api/update || true"
                     echo "No automated fix found."
                 }
             }
         }
     }
 }
+

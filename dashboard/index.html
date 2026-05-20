@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Self-Healing Pipeline Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.35);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.35);
+            --warning: #f59e0b;
+            --warning-glow: rgba(245, 158, 11, 0.35);
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.35);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        header {
+            padding: 2rem 4rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            background: rgba(11, 15, 25, 0.5);
+            z-index: 10;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--primary), #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px var(--primary-glow);
+            font-weight: 800;
+            font-size: 1.2rem;
+            color: white;
+            animation: pulse-glow 2s infinite ease-in-out;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #ffffff, #c7d2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .timestamp {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .main-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+            padding: 2rem 4rem;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
+        }
+
+        .status-header {
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+        }
+
+        /* Server Status Monitor Widget */
+        .status-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2.5rem 1rem;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status-orb {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .status-orb::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            animation: orb-pulse 2s infinite ease-in-out;
+            z-index: -1;
+        }
+
+        .status-label {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+
+        .status-desc {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        /* Status Styling States */
+        .state-healthy {
+            color: var(--success);
+        }
+        .state-healthy .status-orb {
+            background: linear-gradient(135deg, #10b981, #059669);
+            box-shadow: 0 0 35px var(--success-glow);
+        }
+        .state-healthy .status-orb::before {
+            background: var(--success);
+        }
+
+        .state-crashed {
+            color: var(--danger);
+        }
+        .state-crashed .status-orb {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 0 35px var(--danger-glow);
+        }
+        .state-crashed .status-orb::before {
+            background: var(--danger);
+            animation: orb-pulse 0.8s infinite ease-in-out;
+        }
+
+        .state-healing {
+            color: var(--warning);
+        }
+        .state-healing .status-orb {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            box-shadow: 0 0 35px var(--warning-glow);
+        }
+        .state-healing .status-orb::before {
+            background: var(--warning);
+        }
+        .state-healing .status-orb svg {
+            animation: rotate 2s infinite linear;
+        }
+
+        .state-checking {
+            color: var(--text-muted);
+        }
+        .state-checking .status-orb {
+            background: linear-gradient(135deg, #4b5563, #374151);
+            box-shadow: 0 0 20px rgba(75, 85, 99, 0.2);
+        }
+        .state-checking .status-orb::before {
+            background: #4b5563;
+        }
+
+        /* Pipeline Stages visual */
+        .pipeline-card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .pipeline-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 3rem 1.5rem;
+            position: relative;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            margin-bottom: 1rem;
+        }
+
+        .pipeline-line {
+            position: absolute;
+            top: 50%;
+            left: 5%;
+            right: 5%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-50%);
+            z-index: 1;
+            border-radius: 2px;
+        }
+
+        .pipeline-line-progress {
+            position: absolute;
+            top: 50%;
+            left: 5%;
+            width: 0%;
+            height: 4px;
+            background: linear-gradient(to right, var(--primary), var(--success));
+            transform: translateY(-50%);
+            z-index: 2;
+            border-radius: 2px;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        .pipeline-node {
+            position: relative;
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            width: 15%;
+        }
+
+        .node-dot {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #1f2937;
+            border: 3px solid #374151;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.4s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .node-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-align: center;
+            transition: color 0.4s ease;
+            white-space: nowrap;
+        }
+
+        /* Node States */
+        .pipeline-node.active .node-dot {
+            border-color: var(--primary);
+            background: var(--bg-color);
+            box-shadow: 0 0 20px var(--primary-glow);
+            animation: pulse-border 1.5s infinite ease-in-out;
+        }
+        .pipeline-node.active .node-label {
+            color: var(--text-main);
+            font-weight: 700;
+        }
+        .pipeline-node.active svg {
+            color: var(--primary);
+            filter: drop-shadow(0 0 5px var(--primary-glow));
+        }
+
+        .pipeline-node.success .node-dot {
+            border-color: var(--success);
+            background: var(--success);
+            box-shadow: 0 0 15px var(--success-glow);
+        }
+        .pipeline-node.success .node-label {
+            color: var(--success);
+        }
+        .pipeline-node.success svg {
+            color: white;
+        }
+
+        .pipeline-node.failed .node-dot {
+            border-color: var(--danger);
+            background: var(--danger);
+            box-shadow: 0 0 15px var(--danger-glow);
+            animation: shake 0.5s ease-in-out;
+        }
+        .pipeline-node.failed .node-label {
+            color: var(--danger);
+            font-weight: 700;
+        }
+        .pipeline-node.failed svg {
+            color: white;
+        }
+
+        /* Log console */
+        .console {
+            background: #05070c;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: #34d399;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 250px;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .console-line {
+            line-height: 1.4;
+            opacity: 0.9;
+        }
+
+        .console-line.system {
+            color: #818cf8;
+        }
+
+        .console-line.error {
+            color: #f87171;
+            font-weight: 700;
+        }
+
+        .console-line.success-msg {
+            color: #34d399;
+            font-weight: 700;
+        }
+
+        .console-line.warn {
+            color: #fbbf24;
+        }
+
+        /* Instructions list */
+        .instruction-box {
+            padding: 1.25rem;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+        }
+
+        .instruction-box h3 {
+            font-size: 0.95rem;
+            margin-bottom: 0.75rem;
+            color: white;
+            font-weight: 600;
+        }
+
+        .instruction-box ol {
+            padding-left: 1.2rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .instruction-box code {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--primary);
+            font-size: 0.8rem;
+        }
+
+        /* Keyframes Animations */
+        @keyframes orb-pulse {
+            0% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 0.2; }
+            100% { transform: scale(1); opacity: 0.6; }
+        }
+
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-4px); }
+            40%, 80% { transform: translateX(4px); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 10px var(--primary-glow); }
+            50% { box-shadow: 0 0 25px var(--primary-glow); }
+        }
+
+        .pipeline-status-text {
+            font-weight: 700;
+            color: white;
+            text-transform: capitalize;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon">H</div>
+            <div>
+                <h1>Self-Healing Pipeline Monitor</h1>
+                <p style="font-size: 0.8rem; color: var(--text-muted);">Real-time Automated DevOps Remediation</p>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div style="font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+                Pipeline: <span class="pipeline-status-text" id="pipe-status-label">Idle</span>
+            </div>
+            <div class="timestamp" id="last-updated-time">Last Checked: Just Now</div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Sidebar: App Server Status -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <div class="card">
+                <div class="status-header">Server Health</div>
+                
+                <div class="status-display state-checking" id="health-monitor-card">
+                    <div class="status-orb">
+                        <!-- Default check icon or animated gear for healing -->
+                        <svg id="status-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-activity" style="color: white;">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                    </div>
+                    <div class="status-label" id="health-status-label">Checking</div>
+                    <div class="status-desc" id="health-status-desc">Establishing connection to Flask...</div>
+                </div>
+
+                <div class="instruction-box">
+                    <h3>Simulation Triggers</h3>
+                    <ol>
+                        <li>To break the code on GitHub, run: <br><code>.\simulate_pipeline_failure.ps1</code></li>
+                        <li>To trigger a build, go to your Jenkins dashboard and click <b>Build Now</b>.</li>
+                        <li>Watch the visual healing steps in real-time on this screen!</li>
+                        <li>To restore code, run: <br><code>.\resolve_pipeline_failure.ps1</code></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main section: Pipeline Stages and Log Console -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <div class="card pipeline-card">
+                <div class="status-header">Pipeline Orchestration Flow</div>
+                
+                <div class="pipeline-flow">
+                    <div class="pipeline-line"></div>
+                    <div class="pipeline-line-progress" id="flow-progress"></div>
+
+                    <!-- Node 1: SCM -->
+                    <div class="pipeline-node" id="node-scm">
+                        <div class="node-dot">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+                        </div>
+                        <div class="node-label">Checkout SCM</div>
+                    </div>
+
+                    <!-- Node 2: Build -->
+                    <div class="pipeline-node" id="node-build">
+                        <div class="node-dot">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                        </div>
+                        <div class="node-label">Docker Build</div>
+                    </div>
+
+                    <!-- Node 3: Deploy -->
+                    <div class="pipeline-node" id="node-deploy">
+                        <div class="node-dot">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        </div>
+                        <div class="node-label">Deploy Container</div>
+                    </div>
+
+                    <!-- Node 4: Test -->
+                    <div class="pipeline-node" id="node-test">
+                        <div class="node-dot">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+                        </div>
+                        <div class="node-label">Health Test</div>
+                    </div>
+
+                    <!-- Node 5: Remediation -->
+                    <div class="pipeline-node" id="node-healing">
+                        <div class="node-dot">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                        </div>
+                        <div class="node-label">Self-Healing</div>
+                    </div>
+                </div>
+
+                <div class="status-header">Real-Time Event Logs</div>
+                <div class="console" id="console-logs">
+                    <div class="console-line system">[System] Initialize Real-Time Web Console... Connected.</div>
+                    <div class="console-line">Ready to observe Jenkins build triggers.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api/status';
+        
+        let lastPipelineStatus = '';
+        let lastAppStatus = '';
+        let knownLogCount = 0;
+
+        function updateUI(data) {
+            const pipeStatus = data.pipeline_status;
+            const appStatus = data.app_status;
+            const logs = data.logs || [];
+            
+            // 1. Update Header info
+            document.getElementById('pipe-status-label').innerText = pipeStatus;
+            document.getElementById('last-updated-time').innerText = 'Last Checked: ' + new Date().toLocaleTimeString();
+
+            // Apply different style for pipe-status-label in header
+            const pLabel = document.getElementById('pipe-status-label');
+            if (pipeStatus === 'success' || pipeStatus === 'healed') {
+                pLabel.style.color = '#10b981';
+            } else if (pipeStatus === 'failed') {
+                pLabel.style.color = '#ef4444';
+            } else if (pipeStatus === 'healing') {
+                pLabel.style.color = '#f59e0b';
+            } else if (pipeStatus === 'idle') {
+                pLabel.style.color = '#9ca3af';
+            } else {
+                pLabel.style.color = '#6366f1';
+            }
+
+            // 2. Update Server Health Monitor
+            const monitor = document.getElementById('health-monitor-card');
+            const statusLabel = document.getElementById('health-status-label');
+            const statusDesc = document.getElementById('health-status-desc');
+            const iconSvg = document.getElementById('status-icon');
+
+            // Reset class list
+            monitor.className = 'status-display';
+
+            if (appStatus === 'healthy') {
+                monitor.classList.add('state-healthy');
+                statusLabel.innerText = 'HEALTHY';
+                statusDesc.innerText = 'Flask web application is responding normally on port 5000.';
+                iconSvg.innerHTML = '<polyline points="20 6 9 17 4 12"></polyline>'; // Checkmark
+            } else if (appStatus === 'crashed') {
+                monitor.classList.add('state-crashed');
+                statusLabel.innerText = 'CRASHED / OFFLINE';
+                statusDesc.innerText = 'Unable to reach Flask webserver. Application process is down.';
+                iconSvg.innerHTML = '<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>'; // Cross x
+            } else if (appStatus === 'checking') {
+                monitor.classList.add('state-checking');
+                statusLabel.innerText = 'CHECKING...';
+                statusDesc.innerText = 'Pinging Flask app container to inspect responsiveness.';
+                iconSvg.innerHTML = '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>'; // pulse line
+            }
+
+            // If pipeline status is actively healing, override health display to show healing progress
+            if (pipeStatus === 'healing') {
+                monitor.className = 'status-display state-healing';
+                statusLabel.innerText = 'HEALING SERVICE';
+                statusDesc.innerText = 'Ansible playbook executing automatic recovery play...';
+                iconSvg.innerHTML = '<circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path>'; // Gear or clock icon
+            }
+
+            // 3. Update Pipeline node stages
+            const nodes = {
+                scm: document.getElementById('node-scm'),
+                build: document.getElementById('node-build'),
+                deploy: document.getElementById('node-deploy'),
+                test: document.getElementById('node-test'),
+                healing: document.getElementById('node-healing')
+            };
+
+            // Reset nodes
+            Object.values(nodes).forEach(n => {
+                n.className = 'pipeline-node';
+            });
+            const progressLine = document.getElementById('flow-progress');
+            progressLine.style.width = '0%';
+
+            // Active Stage Visualization logic
+            if (pipeStatus === 'idle') {
+                // Keep everything inactive
+            } else if (pipeStatus === 'building') {
+                nodes.scm.classList.add('success');
+                nodes.build.classList.add('active');
+                progressLine.style.width = '17%';
+            } else if (pipeStatus === 'deploying') {
+                nodes.scm.classList.add('success');
+                nodes.build.classList.add('success');
+                nodes.deploy.classList.add('active');
+                progressLine.style.width = '42%';
+            } else if (pipeStatus === 'testing') {
+                nodes.scm.classList.add('success');
+                nodes.build.classList.add('success');
+                nodes.deploy.classList.add('success');
+                nodes.test.classList.add('active');
+                progressLine.style.width = '67%';
+            } else if (pipeStatus === 'success') {
+                nodes.scm.classList.add('success');
+                nodes.build.classList.add('success');
+                nodes.deploy.classList.add('success');
+                nodes.test.classList.add('success');
+                progressLine.style.width = '75%';
+            } else if (pipeStatus === 'failed') {
+                nodes.scm.classList.add('success');
+                nodes.build.classList.add('success');
+                nodes.deploy.classList.add('success');
+                nodes.test.classList.add('failed');
+                progressLine.style.width = '75%';
+            } else if (pipeStatus === 'healing') {
+                nodes.scm.classList.add('success');
+                nodes.build.classList.add('success');
+                nodes.deploy.classList.add('success');
+                nodes.test.classList.add('failed');
+                nodes.healing.classList.add('active');
+                progressLine.style.width = '90%';
+            } else if (pipeStatus === 'healed') {
+                nodes.scm.classList.add('success');
+                nodes.build.classList.add('success');
+                nodes.deploy.classList.add('success');
+                nodes.test.classList.add('success');
+                nodes.healing.classList.add('success');
+                progressLine.style.width = '90%';
+            }
+
+            // 4. Update logs console
+            if (logs.length > knownLogCount) {
+                const consoleDiv = document.getElementById('console-logs');
+                // Slice new logs
+                const newLogs = logs.slice(knownLogCount);
+                newLogs.forEach(l => {
+                    const lineDiv = document.createElement('div');
+                    lineDiv.className = 'console-line';
+                    
+                    if (l.includes("CRITICAL") || l.includes("failed") || l.includes("ERROR") || l.includes("Crashed")) {
+                        lineDiv.classList.add('error');
+                    } else if (l.includes("Heal") || l.includes("playbook") || l.includes("restarting") || l.includes("Applying")) {
+                        lineDiv.classList.add('warn');
+                    } else if (l.includes("complete") || l.includes("success") || l.includes("Healed")) {
+                        lineDiv.classList.add('success-msg');
+                    } else {
+                        lineDiv.classList.add('system');
+                    }
+                    
+                    lineDiv.innerText = l;
+                    consoleDiv.appendChild(lineDiv);
+                });
+                knownLogCount = logs.length;
+                consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            }
+        }
+
+        // Loop status checks
+        function checkStatus() {
+            fetch(API_URL)
+                .then(res => res.json())
+                .then(data => {
+                    updateUI(data);
+                })
+                .catch(err => {
+                    console.error('Error fetching status:', err);
+                    document.getElementById('health-status-desc').innerText = 'Dashboard server offline. Please run dashboard_server.py.';
+                });
+        }
+
+        setInterval(checkStatus, 1000);
+        checkStatus();
+    </script>
+</body>
+</html>
