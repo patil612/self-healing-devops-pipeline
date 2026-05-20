@@ -1,11 +1,14 @@
 import http.server
 import socketserver
 import json
+import urllib.parse
 import urllib.request
 import threading
 import time
 import os
 import sys
+import re
+import subprocess
 
 PORT = 3000
 
@@ -13,9 +16,23 @@ PORT = 3000
 state = {
     "pipeline_status": "idle", # idle, building, deploying, testing, failed, healing, healed, success
     "app_status": "checking",   # healthy, crashed, checking
+    "repo_url": "https://github.com/patil612/self-healing-devops-pipeline.git",
     "last_update": "",
     "logs": []
 }
+
+def load_current_repo_url():
+    global state
+    try:
+        cmd = 'docker exec jenkins cat /var/jenkins_home/jobs/self-healing-demo/config.xml'
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if result.returncode == 0:
+            match = re.search(r'<url>(.*?)</url>', result.stdout)
+            if match:
+                state["repo_url"] = match.group(1)
+                print(f"Loaded current repository URL from Jenkins: {state['repo_url']}")
+    except Exception as e:
+        print(f"Error loading initial repo URL from Jenkins: {e}")
 
 # Thread to periodically check Flask app health
 def flask_health_checker():
@@ -38,6 +55,56 @@ def flask_health_checker():
         
         time.sleep(2)
 
+def parse_github_url(url):
+    url = url.strip()
+    # Matches:
+    # https://github.com/username/repo.git
+    # https://github.com/username/repo
+    # github.com/username/repo
+    # username/repo
+    match = re.search(r'(?:github\.com/|git@github\.com[:/])?([^/]+)/([^/.]+)(?:\.git)?$', url)
+    if match:
+        username = match.group(1)
+        repo = match.group(2)
+        return username, repo
+    return None, None
+
+def update_push_script(username, repo):
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'push_to_github.ps1')
+        if os.path.exists(script_path):
+            with open(script_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Replace $REPO_NAME = "..." and $GITHUB_USERNAME = "..."
+            content = re.sub(r'\$REPO_NAME\s*=\s*"[^"]*"', f'$REPO_NAME = "{repo}"', content)
+            content = re.sub(r'\$GITHUB_USERNAME\s*=\s*"[^"]*"', f'$GITHUB_USERNAME = "{username}"', content)
+            
+            with open(script_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"Updated push_to_github.ps1 with username={username}, repo={repo}")
+    except Exception as e:
+        print(f"Error updating push_to_github.ps1: {e}")
+
+def update_jenkins_config(new_url):
+    try:
+        # Run sed inside the docker container
+        cmd = f'docker exec jenkins sed -i "s|<url>.*</url>|<url>{new_url}</url>|g" /var/jenkins_home/jobs/self-healing-demo/config.xml'
+        subprocess.run(cmd, shell=True, check=True)
+        print(f"Updated Jenkins job config with URL: {new_url}")
+        
+        # Restart Jenkins container in background thread
+        def restart_jenkins():
+            print("Restarting Jenkins container to apply new configuration...")
+            subprocess.run("docker restart jenkins", shell=True)
+            print("Jenkins container restarted.")
+            
+        threading.Thread(target=restart_jenkins, daemon=True).start()
+        return True
+    except Exception as e:
+        print(f"Error updating Jenkins config: {e}")
+        return False
+
 class DashboardHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         # Allow CORS for easy debugging/local file access
@@ -59,28 +126,26 @@ class DashboardHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(state).encode('utf-8'))
         else:
             # Serve index.html or other static files in the dashboard directory
-            # Make sure we serve from the correct folder relative to the script location
             script_dir = os.path.dirname(os.path.abspath(__file__))
             os.chdir(script_dir)
             super().do_GET()
 
     def do_POST(self):
         global state
-        if self.path == '/api/update':
+        parsed_path = urllib.parse.urlparse(self.path)
+        
+        if parsed_path.path == '/api/update':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length).decode('utf-8')
             
-            # Parse form data or JSON
             new_status = ""
             log_msg = ""
             
             try:
-                # Try parsing as JSON first
                 data = json.loads(post_data)
                 new_status = data.get("status", "")
                 log_msg = data.get("log", "")
             except json.JSONDecodeError:
-                # Fallback to query params parsing (e.g. status=building)
                 params = urllib.parse.parse_qs(post_data)
                 if "status" in params:
                     new_status = params["status"][0]
@@ -91,7 +156,6 @@ class DashboardHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 state["pipeline_status"] = new_status
                 state["last_update"] = time.strftime("%Y-%m-%d %H:%M:%S")
                 
-                # Update app status based on pipeline status
                 if new_status == "success" or new_status == "healed":
                     state["app_status"] = "healthy"
                 elif new_status == "failed":
@@ -99,7 +163,6 @@ class DashboardHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 if log_msg:
                     state["logs"].append(f"[{state['last_update']}] {log_msg}")
-                    # Cap logs to last 30 messages
                     state["logs"] = state["logs"][-30:]
 
                 print(f"[{state['last_update']}] Status updated: {new_status} | Logs: {log_msg}")
@@ -108,11 +171,65 @@ class DashboardHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({"result": "success", "state": state}).encode('utf-8'))
+            
+        elif parsed_path.path == '/api/set-repo':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            
+            new_url = ""
+            try:
+                data = json.loads(post_data)
+                new_url = data.get("url", "").strip()
+            except json.JSONDecodeError:
+                params = urllib.parse.parse_qs(post_data)
+                if "url" in params:
+                    new_url = params["url"][0].strip()
+
+            if not new_url:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Missing URL parameter"}).encode('utf-8'))
+                return
+
+            # Append .git extension if not present for clean GitHub formatting
+            if not new_url.endswith('.git') and 'github.com' in new_url:
+                new_url = new_url + '.git'
+
+            username, repo = parse_github_url(new_url)
+            if not username or not repo:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Invalid GitHub repository format"}).encode('utf-8'))
+                return
+
+            print(f"Updating repository configuration. Username: {username}, Repo: {repo}")
+            
+            # Apply configurations
+            success = update_jenkins_config(new_url)
+            if success:
+                update_push_script(username, repo)
+                state["repo_url"] = new_url
+                state["logs"].append(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Repository changed to: {new_url} (Jenkins restarting)")
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"result": "success", "repo_url": new_url}).encode('utf-8'))
+            else:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Failed to update Jenkins configuration"}).encode('utf-8'))
         else:
             self.send_response(404)
             self.end_headers()
 
 def run():
+    # Load current configuration from Jenkins container if running
+    load_current_repo_url()
+    
     # Start health check thread
     checker_thread = threading.Thread(target=flask_health_checker, daemon=True)
     checker_thread.start()
@@ -121,7 +238,7 @@ def run():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
     
-    # Enable socket re-use to avoid port-in-use errors on restart
+    # Enable socket re-use
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), DashboardHTTPRequestHandler) as httpd:
         print(f"Dashboard server started at http://localhost:{PORT}")

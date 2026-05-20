@@ -95,7 +95,7 @@
         .main-container {
             flex: 1;
             display: grid;
-            grid-template-columns: 350px 1fr;
+            grid-template-columns: 380px 1fr;
             gap: 2rem;
             padding: 2rem 4rem;
             max-width: 1600px;
@@ -481,14 +481,14 @@
     </header>
 
     <div class="main-container">
-        <!-- Sidebar: App Server Status -->
+        <!-- Sidebar: App Server Status & Repo settings -->
         <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <!-- Server Health Card -->
             <div class="card">
                 <div class="status-header">Server Health</div>
                 
                 <div class="status-display state-checking" id="health-monitor-card">
                     <div class="status-orb">
-                        <!-- Default check icon or animated gear for healing -->
                         <svg id="status-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-activity" style="color: white;">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                         </svg>
@@ -496,8 +496,30 @@
                     <div class="status-label" id="health-status-label">Checking</div>
                     <div class="status-desc" id="health-status-desc">Establishing connection to Flask...</div>
                 </div>
+            </div>
 
-                <div class="instruction-box">
+            <!-- Repository configuration Card -->
+            <div class="card">
+                <div class="status-header">Repository Settings</div>
+                <div class="instruction-box" style="display: flex; flex-direction: column; gap: 12px; background: none; border: none; padding: 0;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">
+                        Current Repository:
+                        <div id="current-repo-text" style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--primary); word-break: break-all; margin-top: 4px; line-height: 1.3;">Loading...</div>
+                    </div>
+                    <div>
+                        <label for="new-repo-input" style="font-size: 0.85rem; font-weight: 600; color: white; display: block; margin-bottom: 6px;">New GitHub URL or Shorthand:</label>
+                        <input type="text" id="new-repo-input" placeholder="e.g. patil612/new-repo" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 8px; color: white; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; outline: none; transition: border-color 0.2s;">
+                    </div>
+                    <button id="update-repo-btn" style="width: 100%; padding: 10px; background: linear-gradient(135deg, var(--primary), #8b5cf6); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: all 0.2s;" onclick="changeRepository()">
+                        Update Repository
+                    </button>
+                    <div id="repo-update-msg" style="font-size: 0.8rem; text-align: center; display: none; margin-top: 5px; line-height: 1.3;"></div>
+                </div>
+            </div>
+
+            <!-- Info Guide -->
+            <div class="card" style="padding: 1.5rem;">
+                <div class="instruction-box" style="background: none; border: none; padding: 0;">
                     <h3>Simulation Triggers</h3>
                     <ol>
                         <li>To break the code on GitHub, run: <br><code>.\simulate_pipeline_failure.ps1</code></li>
@@ -574,15 +596,18 @@
         let lastPipelineStatus = '';
         let lastAppStatus = '';
         let knownLogCount = 0;
+        let isUpdatingRepo = false;
 
         function updateUI(data) {
             const pipeStatus = data.pipeline_status;
             const appStatus = data.app_status;
+            const repoUrl = data.repo_url;
             const logs = data.logs || [];
             
             // 1. Update Header info
             document.getElementById('pipe-status-label').innerText = pipeStatus;
             document.getElementById('last-updated-time').innerText = 'Last Checked: ' + new Date().toLocaleTimeString();
+            document.getElementById('current-repo-text').innerText = repoUrl || 'Not Configured';
 
             // Apply different style for pipe-status-label in header
             const pLabel = document.getElementById('pipe-status-label');
@@ -629,7 +654,7 @@
                 monitor.className = 'status-display state-healing';
                 statusLabel.innerText = 'HEALING SERVICE';
                 statusDesc.innerText = 'Ansible playbook executing automatic recovery play...';
-                iconSvg.innerHTML = '<circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path>'; // Gear or clock icon
+                iconSvg.innerHTML = '<circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path>'; // clock icon
             }
 
             // 3. Update Pipeline node stages
@@ -697,7 +722,6 @@
             // 4. Update logs console
             if (logs.length > knownLogCount) {
                 const consoleDiv = document.getElementById('console-logs');
-                // Slice new logs
                 const newLogs = logs.slice(knownLogCount);
                 newLogs.forEach(l => {
                     const lineDiv = document.createElement('div');
@@ -705,7 +729,7 @@
                     
                     if (l.includes("CRITICAL") || l.includes("failed") || l.includes("ERROR") || l.includes("Crashed")) {
                         lineDiv.classList.add('error');
-                    } else if (l.includes("Heal") || l.includes("playbook") || l.includes("restarting") || l.includes("Applying")) {
+                    } else if (l.includes("Heal") || l.includes("playbook") || l.includes("restarting") || l.includes("Applying") || l.includes("changed")) {
                         lineDiv.classList.add('warn');
                     } else if (l.includes("complete") || l.includes("success") || l.includes("Healed")) {
                         lineDiv.classList.add('success-msg');
@@ -718,6 +742,67 @@
                 });
                 knownLogCount = logs.length;
                 consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            }
+        }
+
+        function changeRepository() {
+            if (isUpdatingRepo) return;
+            const input = document.getElementById('new-repo-input');
+            const repoUrl = input.value.trim();
+            if (!repoUrl) {
+                showRepoMsg('Please enter a repository URL or name', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('update-repo-btn');
+            isUpdatingRepo = true;
+            btn.innerText = 'Updating...';
+            btn.style.opacity = '0.7';
+            showRepoMsg('Updating configurations & restarting Jenkins...', 'info');
+
+            fetch('http://localhost:3000/api/set-repo', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: repoUrl })
+            })
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().then(err => { throw new Error(err.error || 'Server error') });
+                }
+                return res.json();
+            })
+            .then(data => {
+                showRepoMsg('Success! Jenkins is restarting.', 'success');
+                document.getElementById('current-repo-text').innerText = data.repo_url;
+                input.value = '';
+                // Wait 4 seconds and clear success message
+                setTimeout(() => {
+                    const msgDiv = document.getElementById('repo-update-msg');
+                    msgDiv.style.display = 'none';
+                }, 4000);
+            })
+            .catch(err => {
+                showRepoMsg('Error: ' + err.message, 'error');
+            })
+            .finally(() => {
+                isUpdatingRepo = false;
+                btn.innerText = 'Update Repository';
+                btn.style.opacity = '1';
+            });
+        }
+
+        function showRepoMsg(text, type) {
+            const msgDiv = document.getElementById('repo-update-msg');
+            msgDiv.style.display = 'block';
+            msgDiv.innerText = text;
+            if (type === 'error') {
+                msgDiv.style.color = '#ef4444';
+            } else if (type === 'success') {
+                msgDiv.style.color = '#10b981';
+            } else if (type === 'info') {
+                msgDiv.style.color = '#fbbf24';
             }
         }
 
