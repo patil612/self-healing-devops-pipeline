@@ -18,7 +18,10 @@ state = {
     "app_status": "checking",   # healthy, crashed, checking
     "repo_url": "https://github.com/patil612/self-healing-devops-pipeline.git",
     "last_update": "",
-    "logs": []
+    "logs": [],
+    "build_history": [],        # list of completed build records
+    "build_number": 0,          # current build number counter
+    "current_journey": []       # phases seen in current build
 }
 
 def load_current_repo_url():
@@ -155,7 +158,54 @@ class DashboardHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             if new_status:
                 state["pipeline_status"] = new_status
                 state["last_update"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                
+
+                # ---- Build history tracking ----
+                if new_status == "building":
+                    # Start a new build record
+                    state["build_number"] += 1
+                    state["current_journey"] = ["Building"]
+
+                elif new_status == "deploying":
+                    if "Deploying" not in state["current_journey"]:
+                        state["current_journey"].append("Deploying")
+
+                elif new_status == "testing":
+                    if "Testing" not in state["current_journey"]:
+                        state["current_journey"].append("Testing")
+
+                elif new_status == "failed":
+                    if "Failed" not in state["current_journey"]:
+                        state["current_journey"].append("Failed")
+
+                elif new_status == "healing":
+                    if "Healing" not in state["current_journey"]:
+                        state["current_journey"].append("Healing")
+
+                elif new_status == "healed":
+                    if "Healed" not in state["current_journey"]:
+                        state["current_journey"].append("Healed")
+                    # Finalise build record
+                    state["build_history"].insert(0, {
+                        "build_num": state["build_number"],
+                        "time": state["last_update"],
+                        "result": "healed",
+                        "journey": list(state["current_journey"])
+                    })
+                    state["build_history"] = state["build_history"][:20]
+
+                elif new_status == "success":
+                    if "Success" not in state["current_journey"]:
+                        state["current_journey"].append("Success")
+                    # Finalise build record
+                    state["build_history"].insert(0, {
+                        "build_num": state["build_number"],
+                        "time": state["last_update"],
+                        "result": "success",
+                        "journey": list(state["current_journey"])
+                    })
+                    state["build_history"] = state["build_history"][:20]
+                # --------------------------------
+
                 if new_status == "success" or new_status == "healed":
                     state["app_status"] = "healthy"
                 elif new_status == "failed":
