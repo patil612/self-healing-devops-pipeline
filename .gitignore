@@ -11,3 +11,6 @@ __pycache__/
 # Jenkins and Docker local state
 .jenkins/
 .data/
+
+# Environment credentials
+.env
