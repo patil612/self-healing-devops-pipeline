@@ -14,6 +14,7 @@ pipeline {
         stage('Setup Kubeconfig') {
             steps {
                 script {
+                    sh "curl -X POST -d 'status=building&log=Pipeline build #${env.BUILD_NUMBER} started on Jenkins...' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=building&log=Pipeline build #${env.BUILD_NUMBER} started on Jenkins...' http://172.17.0.1:3000/api/update || true"
                     sh '''
                         if [ -f /root/.kube/config ]; then
                             echo "Translating host kubeconfig for Linux container..."
