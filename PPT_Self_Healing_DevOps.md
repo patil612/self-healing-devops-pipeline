@@ -1,204 +1,119 @@
-# 🎯 PPT Content — Self-Healing DevOps Pipeline
-### Project Review Presentation
+# 🎯 PPT Content — Enterprise Self-Healing Kubernetes Pipeline
+### Project Review Presentation (Advanced DevOps Edition)
 
 ---
 
 ## 🖥️ SLIDE 1 — Title Slide
 
-> **Title:** Self-Healing DevOps Pipeline
-> **Subtitle:** Automated Failure Detection & Remediation using Jenkins, Docker, Ansible & Python
-> **Subject:** DevOps Lab | Project Review
+> **Title:** Advanced Self-Healing DevOps Pipeline
+> **Subtitle:** Orchestrating Native Kubernetes Self-Healing, Helm Auto-Rollbacks, & Prometheus-Grafana Monitoring
+> **Subject:** DevOps Lab | Graduation Project Review
+> **Presented by:** Start-Automating DevOps Team
 
 ---
 
-## 📌 SLIDE 2 — Problem Statement & Objective
+## 📌 SLIDE 2 — Problem Statement & Enterprise Objective
 
-### 🔴 Problem Statement
-In modern software systems, applications face failures like **crashes, missing dependencies, and high latency**. These require **manual intervention** — which is slow, error-prone, and costly.
+### 🔴 The Challenge in Production
+Bare Docker setups lack automatic scaling, container health isolation, and robust deployment recovery.
+*   **App Container Crashes**: Downtime occurs if external log tools fail to reboot the process.
+*   **Failed Deployments**: Deploying broken updates immediately impacts 100% of incoming user traffic.
+*   **Traffic Spikes**: No dynamic scaling causes CPU saturation and slow responses.
+*   **Lack of Telemetry**: Troubleshooting relies on reading raw server logs instead of looking at visual metrics.
 
-**Pain Points:**
-- App containers crash → system goes down
-- Dependency errors go unnoticed until users report them
-- Manual log reading & fixing takes hours
-- No automatic recovery in traditional pipelines
-
-### 🟢 Objective
-Build a **Self-Healing CI/CD Pipeline** that:
-1. **Detects** failures automatically via log analysis
-2. **Diagnoses** root cause using a Python Log Analyzer
-3. **Remediates** automatically using Ansible Playbooks
-4. **Notifies** the dashboard with real-time status
-
-> **Goal:** Zero manual intervention — the system **heals itself**
+### 🟢 The Enterprise Solution
+Establish a **Self-Healing Kubernetes CI/CD Pipeline** that:
+1.  **Orchestrates** deployment using Helm charts.
+2.  **Self-Heals Natively** via Kubernetes Liveness & Readiness probes.
+3.  **Autoscales** dynamically using the Horizontal Pod Autoscaler (HPA) and Metrics Server.
+4.  **Auto-Rolls Back** failed deployments to the last stable release.
+5.  **Monitors Metrics** using Prometheus and Grafana dashboards.
 
 ---
 
-## 📌 SLIDE 3 — Architecture & Workflow
+## 📌 SLIDE 3 — Architecture & Tool Stack
 
-### Architecture Diagram
-
+### System Workflow Diagram
 ```
-[ GitHub Code Push ]
-        ↓
-[ Jenkins Pipeline ]
-  Stage 1: BUILD   → docker build ./app
-  Stage 2: DEPLOY  → docker run flask-app (port 5000)
-  Stage 3: TEST    → curl http://app:5000/ (health check)
-        ↓ FAILURE
-[ Python Log Analyzer ]
-  → Reads docker logs
-  → Detects error pattern
-  → Outputs: RECOMMENDATION
-        ↓
-[ Ansible Playbook ]
-  → heal_service.yml    (crash/latency → restart container)
-  → heal_dependency.yml (missing dep → pip install + restart)
-        ↓
-[ Dashboard (port 3000) ]
-  building → deploying → testing → healed ✅
+  [ GitHub Push ]
+        │
+  [ Jenkins Pipeline ]
+        ├── Stage 1: Build & Load Docker Image
+        ├── Stage 2: Helm Deploy (helm upgrade --install)
+        └── Stage 3: Rollout Verification Check (kubectl rollout status)
+                  │
+                  ├── SUCCESS ──► Stable Running Pods (Port 5000)
+                  │
+                  └── FAILURE ──► [ Helm Rollback (helm rollback) ] ──► Restore Last Stable Release
 ```
 
-### Tool Integration Table
+### Advanced DevOps Tool Integration
 
-| Tool | Role |
-|------|------|
-| **GitHub** | Source code repository |
-| **Jenkins** | Orchestrates Build → Deploy → Test → Heal |
-| **Docker** | Containerizes Flask app; manages lifecycle |
-| **Python** | `log_analyzer.py` detects errors & recommends fix |
-| **Ansible** | Executes automated healing playbooks |
-| **Flask** | Sample app with simulated failure endpoints |
-| **Dashboard** | Real-time monitoring UI (Node.js, port 3000) |
+| Tool | Enterprise Role |
+| :--- | :--- |
+| **Jenkins** | Pipelines build automation and rollback orchestration. |
+| **Kubernetes (Minikube)** | Runs, isolates, and manages container state. |
+| **Helm** | Declares and rolls back application packages. |
+| **Liveness Probe** | Restarts crashed containers automatically. |
+| **Readiness Probe** | Isolates latent pods from incoming traffic. |
+| **HPA + Metrics Server** | Scales container pods horizontally based on CPU demand. |
+| **Prometheus** | Scrapes and stores telemetry metrics. |
+| **Grafana** | Visualizes system resource consumption and restarts. |
 
 ---
 
-## 📌 SLIDE 4 — DevOps Tool Installation & Setup
+## 📌 SLIDE 4 — CI/CD Pipeline & Auto-Rollback
 
-### GitHub
-- Repo: `patil612/self-healing-devops-pipeline`
-- Jenkins pulls from GitHub via `Pipeline script from SCM`
-- Script path: `Jenkinsfile`
-
-### Jenkins (runs as Docker container)
-```yaml
-# docker-compose.yml
-jenkins:
-  build: ./jenkins
-  ports: ["8080:8080", "50000:50000"]
-  volumes:
-    - jenkins_home:/var/jenkins_home
-    - /var/run/docker.sock:/var/run/docker.sock  # allows Docker control
-  user: root
-```
-- Accessible at `http://localhost:8080`
-- Docker socket mounted → Jenkins can build & run containers
-
-### Docker
-- Start everything: `docker-compose up -d --build`
-- App container: `flask-app-failure` on **port 5000**
-- Jenkins container: on **port 8080**
-
-### Ansible
-- Installed inside Jenkins container
-- Inventory: `ansible/inventory` (localhost)
-- Playbooks in: `ansible/playbooks/`
-  - `heal_service.yml` → restarts crashed container
-  - `heal_dependency.yml` → pip install + restart
+### Declarative Pipeline Stages (`Jenkinsfile`)
+*   **BUILD**: Compiles the code, builds the container image `flask-app-failure:latest`, and imports it directly into the Minikube image cache.
+*   **DEPLOY**: Executes `helm upgrade --install` to perform rolling updates with zero downtime.
+*   **VERIFY**: Runs `kubectl rollout status` to check if the new pods start successfully.
+*   **AUTO-ROLLBACK (Failure Post-Action)**: If verification tests fail, Jenkins captures diagnostic logs and triggers `helm rollback flask-app-healing` to immediately restore the last stable deployment.
 
 ---
 
-## 📌 SLIDE 5 — Pipeline Creation (Jenkinsfile)
+## 📌 SLIDE 5 — Kubernetes Native Self-Healing
 
-**Type:** Declarative Pipeline | **File:** `Jenkinsfile`
+### 1. Liveness Probes (Crash Recovery)
+*   **How it works**: Kubernetes periodically pings `/`. If the app fails (e.g. returns a 500 error or doesn't respond), Kubernetes kills the container and starts a new one.
+*   **Outcome**: Solves process lockups and crashes without needing external scripts.
 
-### Stage 1 — BUILD
-```groovy
-sh 'docker build -t flask-app-failure ./app'
-```
-Builds Docker image from `./app/Dockerfile`
-
-### Stage 2 — DEPLOY
-```groovy
-sh "docker rm -f flask-app-failure || true"
-sh "docker run -d -p 5000:5000 --name flask-app-failure flask-app-failure"
-```
-Removes old container → starts fresh one on port 5000
-
-### Stage 3 — TEST
-```groovy
-sleep 5
-sh "curl -f http://172.17.0.1:5000/"   // Health check
-```
-Waits 5s, then pings app. Expected: `{"status": "healthy"}`
-
-### POST — Self-Healing (on Failure)
-```
-1. Capture logs  →  docker logs flask-app-failure > failure_log.txt
-2. Analyze logs  →  python3 scripts/log_analyzer.py failure_log.txt
-3. Get fix       →  RECOMMENDATION: heal_service.yml
-4. Run Ansible   →  ansible-playbook ansible/playbooks/heal_service.yml
-5. App recovers  →  Dashboard: "Healed ✅"
-```
+### 2. Readiness Probes (Traffic Isolation)
+*   **How it works**: Evaluates container health before sending traffic. If the response is slow (e.g. latency spikes on `/simulate/latency`), Kubernetes marks the pod as `Not Ready`.
+*   **Outcome**: Users never see error pages or time-out screens because traffic is routed only to active, healthy pods.
 
 ---
 
-## 📌 SLIDE 6 — Containerization
+## 📌 SLIDE 6 — Dynamic Autoscaling (HPA)
 
-### Dockerfile (`app/Dockerfile`)
-```dockerfile
-FROM python:3.9-slim          # Lightweight Python base image
-WORKDIR /app                  # Set working directory
-COPY requirements.txt .       # Copy dependency list
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .                      # Copy source code
-CMD ["python", "app.py"]      # Start Flask app
-```
-
-### Flask App — Simulated Endpoints
-
-| Endpoint | Behavior |
-|----------|----------|
-| `/` | Returns `{"status": "healthy"}` — normal health check |
-| `/simulate/crash` | Calls `os._exit(1)` → kills container |
-| `/simulate/latency` | Sleeps 10s → simulates slow response |
-| `/simulate/missing_dep` | Imports non-existent module → `ModuleNotFoundError` |
-
-### Key Docker Commands
-```bash
-docker build -t flask-app-failure ./app                                   # Build image
-docker run -d -p 5000:5000 --name flask-app-failure flask-app-failure     # Run
-docker ps                                                                  # Check running containers
-docker logs flask-app-failure                                              # View logs
-docker rm -f flask-app-failure                                             # Stop & remove
-docker-compose up -d --build                                               # Start full infrastructure
-```
+### Metrics-Server & Autoscaling Workflow
+1.  **Metrics Scraping**: Metrics Server queries CPU and Memory metrics from running pods.
+2.  **Resource Limits**: Pods are configured with CPU/Memory request baselines and limits.
+3.  **Horizontal Pod Autoscaler (HPA)**:
+    *   Tracks CPU utilization against a defined target (e.g. 80%).
+    *   If traffic triggers high load, HPA dynamically scales pods up (from 2 up to 5 replicas).
+    *   Once load cools down, the cluster scales back down to save infrastructure resources.
 
 ---
 
-## 📌 SLIDE 7 — Summary
+## 📌 SLIDE 7 — Telemetry & Visual Monitoring
 
-### Failures Handled Automatically
-
-| Failure | Detection | Auto Fix |
-|---------|-----------|----------|
-| App Crash | `CRITICAL` in logs | Restart container |
-| Missing Dependency | `ModuleNotFoundError` | pip install + restart |
-| High Latency | `WARNING: high latency` | Restart container |
-
-### Key Takeaways
-- **Jenkins** = Pipeline brain 🧠
-- **Docker** = Isolated, reproducible containers 📦
-- **Ansible** = Automated fixer 🔧
-- **Python** = Smart log detective 🔍
-- **GitHub** = Single source of truth 📁
-
-> This pattern is used at **Netflix, Google, Amazon** — systems that self-recover without waking engineers at 3AM! 🚀
-
-### Tips for Presentation
-- Be ready to show the **live `docker ps`** command to prove containers are running
-- Open `http://localhost:8080` to show Jenkins is configured
-- Show the `Jenkinsfile` when explaining the pipeline stages
+### Prometheus + Grafana Integration
+*   **Prometheus**: Acts as the time-series database, scraping resource metrics and liveness checks.
+*   **Grafana Dashboards**: 
+    *   Visualize CPU and memory patterns.
+    *   Track active replica counts and pod restart events.
+    *   Show real-time alert firing status.
+*   **Alertmanager**: Triggers Slack/Telegram/Email notifications to developers if pods enter a crash loop or hit sustained high CPU limits.
 
 ---
 
-*Presentation prepared for DevOps Lab Project Review — May 2026*
+## 📌 SLIDE 8 — Presentation & Demo Checklist
+
+Be ready to showcase the following live scenarios during your review:
+
+1.  **Kubernetes Dashboard**: Run `minikube dashboard` to visually show the workload.
+2.  **Trigger Crash**: Run `curl` against `/simulate/crash` and show `kubectl get pods -w` outputting the container restart event.
+3.  **Trigger Latency**: Run `curl` against `/simulate/latency` and show the pod readiness changing from `1/1` to `0/1`.
+4.  **Autoscaling Demo**: Run `stress-ng` inside a pod and watch the replica count scale up in real-time.
+5.  **Helm Rollback Demo**: Deploy a broken image and show Jenkins automatically rolling back the release.
