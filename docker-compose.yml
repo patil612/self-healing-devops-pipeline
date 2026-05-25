@@ -1,6 +1,6 @@
-version: '3.8'
-
 services:
+
+  # ─── Jenkins CI/CD Server ──────────────────────────────────────────────────
   jenkins:
     build: ./jenkins
     container_name: jenkins
@@ -10,18 +10,50 @@ services:
       - "50000:50000"
     volumes:
       - jenkins_home:/var/jenkins_home
-      # Mount the Docker socket to allow Jenkins to spawn/control sibling containers
+      # Mount Docker socket so Jenkins can build/run sibling containers
       - /var/run/docker.sock:/var/run/docker.sock
-      # Mount Kubernetes config and certificates
+      # Mount Kubernetes config and certificates (for when Minikube is available)
       - C:/Users/rajat/.kube:/root/.kube
       - C:/Users/rajat/.minikube:/root/.minikube
+    networks:
+      - devops-net
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # Run as root to access the docker socket easily
     user: root
-  # We can also define the app here, but ideally Jenkins should deploy it.
-  # For the purpose of the "Self-Healing" demo, let's have Jenkins manage the app container.
-  # So we won't define the app service here, but we will use the same network if needed.
+
+  # ─── Self-Healing Dashboard Server ────────────────────────────────────────
+  dashboard:
+    build: ./dashboard
+    container_name: dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount project root so dashboard can read .env and scripts/
+      - .:/project
+      # Mount Docker socket so dashboard can inspect Jenkins container config
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - devops-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    user: root
+
+  # ─── Demo Flask App ─────────────────────────────────────────────────────────
+  flask-app:
+    build: ./app
+    container_name: flask-app-demo
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    networks:
+      - devops-net
+
+networks:
+  devops-net:
+    driver: bridge
 
 volumes:
   jenkins_home:
