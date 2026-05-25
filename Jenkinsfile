@@ -6,9 +6,35 @@ pipeline {
         HELM_RELEASE = "flask-app-healing"
         // Slack webhook can be injected from Jenkins system config or credentials
         SLACK_WEBHOOK_URL = ""
+        // Path to Linux translated kubeconfig
+        KUBECONFIG = "/root/.kube-linux/config"
     }
 
     stages {
+        stage('Setup Kubeconfig') {
+            steps {
+                script {
+                    sh '''
+                        if [ -f /root/.kube/config ]; then
+                            echo "Translating host kubeconfig for Linux container..."
+                            mkdir -p /root/.kube-linux
+                            cp /root/.kube/config /root/.kube-linux/config
+                            # Replace Windows paths and backslashes with Linux compatible paths
+                            sed -i 's|C:\\\\Users\\\\rajat\\\\.minikube|/root/.minikube|g' /root/.kube-linux/config
+                            sed -i 's|\\\\|/|g' /root/.kube-linux/config
+                            # Route cluster API requests to the host machine
+                            sed -i 's|127.0.0.1|host.docker.internal|g' /root/.kube-linux/config
+                            sed -i 's|localhost|host.docker.internal|g' /root/.kube-linux/config
+                            chmod 600 /root/.kube-linux/config
+                            echo "Kubeconfig successfully configured!"
+                        else
+                            echo "Warning: /root/.kube/config not found. Make sure volumes are mounted."
+                        fi
+                    '''
+                }
+            }
+        }
+
         stage('Slack Notification: Start') {
             steps {
                 script {
