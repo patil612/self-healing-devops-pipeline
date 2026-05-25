@@ -32,13 +32,5 @@ def simulate_missing_dep():
         return jsonify({"error": str(e), "status": "failed"}), 500
     return jsonify({"status": "ok"}), 200
 
-# SIMULATED FAILURE FOR DEMO
-import sys
-print('CRITICAL: Application crasing due to simulated unrecoverable error!', file=sys.stderr)
-os._exit(1)
-# SIMULATED FAILURE FOR DEMO
-import sys
-print('CRITICAL: Application crasing due to simulated unrecoverable error!', file=sys.stderr)
-os._exit(1)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

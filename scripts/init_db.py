@@ -40,7 +40,7 @@ print(f"Connecting to database '{dbname}' on AWS RDS host '{host}'...")
 try:
     # Try importing psycopg2-binary or pg8000 or default modules
     try:
-        import psycopg2
+        import psycopg2  # type: ignore
         conn = psycopg2.connect(
             dbname=dbname,
             user=username,
@@ -51,7 +51,7 @@ try:
         print("Connected successfully via psycopg2 driver.")
     except ImportError:
         try:
-            import pg8000
+            import pg8000  # type: ignore
             conn = pg8000.dbapi.connect(
                 database=dbname,
                 user=username,

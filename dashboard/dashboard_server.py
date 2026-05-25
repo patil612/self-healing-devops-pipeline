@@ -44,11 +44,11 @@ def get_db_connection():
             port = int(port)
             
         try:
-            import psycopg2
+            import psycopg2  # type: ignore
             return psycopg2.connect(dbname=dbname, user=username, password=password, host=host, port=port)
         except ImportError:
             try:
-                import pg8000
+                import pg8000  # type: ignore
                 return pg8000.dbapi.connect(database=dbname, user=username, password=password, host=host, port=port)
             except ImportError:
                 return None

@@ -12,7 +12,7 @@ pipeline {
         stage('Slack Notification: Start') {
             steps {
                 script {
-                    sh "python3 scripts/notifier.py --status STARTING --build ${env.BUILD_NUMBER} --webhook ${SLACK_WEBHOOK_URL} || true"
+                    sh "python3 scripts/notifier.py --status STARTING --build ${env.BUILD_NUMBER} --webhook ${env.SLACK_WEBHOOK_URL} || true"
                 }
             }
         }
@@ -78,11 +78,11 @@ pipeline {
                     sh "curl -X POST -d 'status=testing&log=Starting Health Test phase: Verifying rollout status...' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=testing&log=Starting Health Test phase: Verifying rollout status...' http://172.17.0.1:3000/api/update || true"
                     
                     // Verify Kubernetes deployment status
-                    sh "kubectl rollout status deployment/${HELM_RELEASE}-flask-app --timeout=60s"
+                    sh "kubectl rollout status deployment/${env.HELM_RELEASE}-flask-app --timeout=60s"
                     
                     // Run AI Anomaly detector to ensure metrics/logs are stable post-deployment
                     def logFile = "deployment_test_logs.txt"
-                    sh "kubectl logs deployment/${HELM_RELEASE}-flask-app --tail=50 > ${logFile} 2>&1 || true"
+                    sh "kubectl logs deployment/${env.HELM_RELEASE}-flask-app --tail=50 > ${logFile} 2>&1 || true"
                     
                     // Execute AI/ML anomaly verification script
                     sh "python3 scripts/anomaly_detector.py ${logFile} 10.0 150.0"
@@ -101,26 +101,26 @@ pipeline {
         success {
             script {
                 sh "curl -X POST -d 'status=success&log=Pipeline built, deployed, and verified successfully on Kubernetes!' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=success&log=Pipeline built, deployed, and verified successfully on Kubernetes!' http://172.17.0.1:3000/api/update || true"
-                sh "python3 scripts/notifier.py --status SUCCESS --build ${env.BUILD_NUMBER} --webhook ${SLACK_WEBHOOK_URL} || true"
+                sh "python3 scripts/notifier.py --status SUCCESS --build ${env.BUILD_NUMBER} --webhook ${env.SLACK_WEBHOOK_URL} || true"
             }
         }
         failure {
             script {
                 sh "curl -X POST -d 'status=failed&log=Health check failed! App container crashed or unresponsive.' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=failed&log=Health check failed! App container crashed or unresponsive.' http://172.17.0.1:3000/api/update || true"
                 echo "Pipeline failed! Initiating Auto-Rollback process..."
-                sh "python3 scripts/notifier.py --status FAILED --build ${env.BUILD_NUMBER} --error 'Health verification failure' --webhook ${SLACK_WEBHOOK_URL} || true"
+                sh "python3 scripts/notifier.py --status FAILED --build ${env.BUILD_NUMBER} --error 'Health verification failure' --webhook ${env.SLACK_WEBHOOK_URL} || true"
                 
                 // Capture cluster details for debugging
-                sh "kubectl describe deployment/${HELM_RELEASE}-flask-app || true"
-                sh "kubectl get pods -l app=${HELM_RELEASE}-flask-app || true"
+                sh "kubectl describe deployment/${env.HELM_RELEASE}-flask-app || true"
+                sh "kubectl get pods -l app=${env.HELM_RELEASE}-flask-app || true"
                 
                 // Roll back to the previous stable release using Helm
                 sh "curl -X POST -d 'status=healing&log=Deploy failed. Running Helm rollback to last stable release...' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=healing&log=Deploy failed. Running Helm rollback to last stable release...' http://172.17.0.1:3000/api/update || true"
                 echo "Rolling back deployment..."
-                sh "helm rollback ${HELM_RELEASE} || echo 'No previous release found to rollback to.'"
+                sh "helm rollback ${env.HELM_RELEASE} || echo 'No previous release found to rollback to.'"
                 
                 sh "curl -X POST -d 'status=healed&log=Helm auto-rollback executed successfully. Restored previous stable deployment version.' http://host.docker.internal:3000/api/update || curl -X POST -d 'status=healed&log=Helm auto-rollback executed successfully. Restored previous stable deployment version.' http://172.17.0.1:3000/api/update || true"
-                sh "python3 scripts/notifier.py --status ROLLBACK --build ${env.BUILD_NUMBER} --action 'Helm Rollback' --webhook ${SLACK_WEBHOOK_URL} || true"
+                sh "python3 scripts/notifier.py --status ROLLBACK --build ${env.BUILD_NUMBER} --action 'Helm Rollback' --webhook ${env.SLACK_WEBHOOK_URL} || true"
                 echo "Heal attempt complete."
             }
         }

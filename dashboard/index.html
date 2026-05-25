@@ -1215,11 +1215,12 @@
             'healed':  { text: 'Failed → Healed',  cls: 'result-healed'  }
         };
 
-        let lastHistoryLen = -1;
+        let lastHistoryJSON = "";
 
         function renderHistory(history) {
-            if (history.length === lastHistoryLen) return; // no change
-            lastHistoryLen = history.length;
+            const currentJSON = JSON.stringify(history);
+            if (currentJSON === lastHistoryJSON) return; // no change
+            lastHistoryJSON = currentJSON;
 
             const container = document.getElementById('history-list');
             if (!history.length) {
