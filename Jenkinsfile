@@ -163,8 +163,8 @@ pipeline {
                             echo "Attempt $i failed — waiting 5s..."
                             sleep 5
                         done
-                        echo "⚠️ Health check could not verify — continuing..."
-                        exit 0
+                        echo "❌ Health check verification failed — aborting pipeline to trigger self-healing."
+                        exit 1
                     '''
                     // Kubernetes health (only if cluster exists)
                     sh '''
