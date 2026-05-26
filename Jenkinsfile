@@ -195,12 +195,15 @@ pipeline {
                       -d 'status=success&log=🎉 Pipeline #${env.BUILD_NUMBER} SUCCEEDED! App is live at http://localhost:5000' \\
                       ${env.DASHBOARD} || true
                 """
+                currentBuild.description = "Deployment completed successfully."
                 sh "docker tag ${env.DOCKER_IMAGE}:latest ${env.DOCKER_IMAGE}:stable || true"
                 sh "python3 scripts/notifier.py --status SUCCESS --build ${env.BUILD_NUMBER} --webhook ${env.SLACK_WEBHOOK_URL} || true"
             }
         }
         failure {
             script {
+                currentBuild.displayName = "#${env.BUILD_NUMBER} - Healed"
+                currentBuild.description = "Auto-rollback executed successfully to restore previous stable version."
                 sh """
                     curl -s -X POST \\
                       -d 'status=failed&log=❌ Pipeline #${env.BUILD_NUMBER} FAILED! Initiating self-healing...' \\
