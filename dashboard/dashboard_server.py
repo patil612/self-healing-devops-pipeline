@@ -442,7 +442,9 @@ class DashboardHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
 
 def run():
-    load_current_repo_url()
+    # Run load_current_repo_url in a background thread to avoid blocking server startup
+    repo_thread = threading.Thread(target=load_current_repo_url, daemon=True)
+    repo_thread.start()
     
     checker_thread = threading.Thread(target=flask_health_checker, daemon=True)
     checker_thread.start()

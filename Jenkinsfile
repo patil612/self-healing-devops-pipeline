@@ -195,6 +195,7 @@ pipeline {
                       -d 'status=success&log=🎉 Pipeline #${env.BUILD_NUMBER} SUCCEEDED! App is live at http://localhost:5000' \\
                       ${env.DASHBOARD} || true
                 """
+                sh "docker tag ${env.DOCKER_IMAGE}:latest ${env.DOCKER_IMAGE}:stable || true"
                 sh "python3 scripts/notifier.py --status SUCCESS --build ${env.BUILD_NUMBER} --webhook ${env.SLACK_WEBHOOK_URL} || true"
             }
         }
@@ -216,8 +217,25 @@ pipeline {
                     if command -v helm > /dev/null 2>&1 && kubectl get nodes > /dev/null 2>&1; then
                         helm rollback ${HELM_RELEASE} || echo "No previous Helm release to rollback."
                     else
-                        docker restart flask-app-demo 2>/dev/null || true
-                        echo "Restarted Docker container as rollback."
+                        echo "No Kubernetes cluster — deploying with Docker rollback..."
+                        docker stop flask-app-demo 2>/dev/null || true
+                        docker rm   flask-app-demo 2>/dev/null || true
+                        if docker image inspect ${DOCKER_IMAGE}:stable >/dev/null 2>&1; then
+                            docker run -d \
+                              --name flask-app-demo \
+                              --network project3_devops-net \
+                              -p 5000:5000 \
+                              --restart unless-stopped \
+                              ${DOCKER_IMAGE}:stable
+                        else
+                            docker run -d \
+                              --name flask-app-demo \
+                              --network project3_devops-net \
+                              -p 5000:5000 \
+                              --restart unless-stopped \
+                              project3-flask-app:latest
+                        fi
+                        echo "Docker deployment rollback complete."
                     fi
                 '''
                 sh """
