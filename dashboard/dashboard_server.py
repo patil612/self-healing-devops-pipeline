@@ -180,14 +180,19 @@ def flask_health_checker():
     while True:
         # Only check health if we are not in the middle of deploying/building
         if state["pipeline_status"] not in ["building", "deploying"]:
-            try:
-                req = urllib.request.Request("http://localhost:5000/", method="GET")
-                with urllib.request.urlopen(req, timeout=1.5) as response:
-                    if response.status == 200:
-                        state["app_status"] = "healthy"
-                    else:
-                        state["app_status"] = "crashed"
-            except Exception:
+            success = False
+            # Try flask-app-demo (internal Docker container name) and localhost
+            for host in ["flask-app-demo", "localhost", "host.docker.internal"]:
+                try:
+                    req = urllib.request.Request(f"http://{host}:5000/", method="GET")
+                    with urllib.request.urlopen(req, timeout=1.5) as response:
+                        if response.status == 200:
+                            state["app_status"] = "healthy"
+                            success = True
+                            break
+                except Exception:
+                    continue
+            if not success:
                 state["app_status"] = "crashed"
         else:
             state["app_status"] = "checking"

@@ -6,7 +6,7 @@ import json
 DEFAULT_WEBHOOK = ""
 
 def send_slack_card(status, build_num, action, error_details, webhook):
-    if not webhook or not webhook.strip():
+    if not webhook or not webhook.strip() or webhook.strip().lower() in ["null", "none", ""]:
         print("Slack Webhook URL is not configured. Skipping notification.")
         return
 
